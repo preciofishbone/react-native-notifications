@@ -2,9 +2,9 @@
 <manifest
     xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.wix.reactnativenotifications">
-
     <application>
-
+        <receiver android:name=".core.ScheduledNotificationReceiver" android:exported="false">
+        </receiver>
         <!--
          A proxy-service that gives the library an opportunity to do some work before launching/resuming the actual application task.
          -->

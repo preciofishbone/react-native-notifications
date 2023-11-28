@@ -102,7 +102,11 @@ public class RNNotificationsModule extends ReactContextBaseJavaModule implements
         if(BuildConfig.DEBUG) Log.d(LOGTAG, "Native method invocation: postLocalNotification");
         final Bundle notificationProps = Arguments.toBundle(notificationPropsMap);
         final IPushNotification pushNotification = PushNotification.get(getReactApplicationContext().getApplicationContext(), notificationProps);
-        pushNotification.onPostRequest(notificationId);
+        if (notificationProps.getString("fireDate", null) != null) {
+            pushNotification.onScheduledPostRequest(notificationId);
+        } else {
+            pushNotification.onPostRequest(notificationId);
+        }
     }
 
     @ReactMethod

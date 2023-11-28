@@ -51,4 +51,8 @@ public class PushNotificationProps {
         String result = mBundle.getString(key1);
         return result == null ? mBundle.getString(key2) : result;
     }
+
+    public String getFireDateISO() {
+        return mBundle.getString("fireDate");
+    }
 }

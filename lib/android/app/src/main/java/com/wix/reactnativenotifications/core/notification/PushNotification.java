@@ -1,11 +1,13 @@
 package com.wix.reactnativenotifications.core.notification;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -23,6 +25,17 @@ import static com.wix.reactnativenotifications.Defs.NOTIFICATION_OPENED_EVENT_NA
 import static com.wix.reactnativenotifications.Defs.NOTIFICATION_RECEIVED_EVENT_NAME;
 import static com.wix.reactnativenotifications.Defs.NOTIFICATION_RECEIVED_BACKGROUND_EVENT_NAME;
 import static com.wix.reactnativenotifications.Defs.LOGTAG;
+import static com.wix.reactnativenotifications.Defs.NOTIFICATION_SHARED_PREFERENCE_KEY;
+
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.util.Date;
+import java.util.TimeZone;
 
 public class PushNotification implements IPushNotification {
 
@@ -42,6 +55,7 @@ public class PushNotification implements IPushNotification {
         public void onAppNotVisible() {
         }
     };
+    final protected SharedPreferences mSharedPreferences;
     final private String DEFAULT_CHANNEL_ID = "channel_01";
     final private String DEFAULT_CHANNEL_NAME = "Channel Name";
 
@@ -59,6 +73,7 @@ public class PushNotification implements IPushNotification {
         mAppLaunchHelper = appLaunchHelper;
         mJsIOHelper = JsIOHelper;
         mNotificationProps = createProps(bundle);
+        mSharedPreferences = context.getSharedPreferences(NOTIFICATION_SHARED_PREFERENCE_KEY, Context.MODE_PRIVATE);
         initDefaultChannel(context);
     }
 
@@ -80,6 +95,28 @@ public class PushNotification implements IPushNotification {
     @Override
     public int onPostRequest(Integer notificationId) {
         return postNotification(notificationId);
+    }
+
+    @Override
+    public int onScheduledPostRequest(Integer notificationId) {
+        String fireDateISO = mNotificationProps.getFireDateISO();
+        if (fireDateISO != null) {
+            DateFormat jsUtcFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
+            jsUtcFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+            try {
+                final PendingIntent scheduledIntent = NotificationIntentAdapter.createScheduledNotificationIntent(mContext, mNotificationProps, notificationId);
+                Date fireDate = jsUtcFormat.parse(fireDateISO);
+                long fireAtMillis = fireDate.getTime();
+
+                return postScheduleNotification(scheduledIntent, fireAtMillis, notificationId);
+            } catch (ParseException ex) {
+                Log.e(LOGTAG, "Error parsing date: " + fireDateISO);
+                return -1;
+            }
+        } else {
+            Log.e(LOGTAG, "No fireDate value");
+            return -1;
+        }
     }
 
     @Override
@@ -193,6 +230,38 @@ public class PushNotification implements IPushNotification {
     protected void postNotification(int id, Notification notification) {
         final NotificationManager notificationManager = (NotificationManager) mContext.getSystemService(Context.NOTIFICATION_SERVICE);
         notificationManager.notify(id, notification);
+    }
+
+    protected int postScheduleNotification(PendingIntent pendingIntent, long fireAtMillis, Integer notificationId) {
+        int id = notificationId != null ? notificationId : createNotificationId(null);
+
+        saveScheduledNotification(id);
+
+        AlarmManager alarmManager = (AlarmManager) mContext.getSystemService(Context.ALARM_SERVICE);
+        alarmManager.set(AlarmManager.RTC_WAKEUP, fireAtMillis, pendingIntent);
+
+        return id;
+    }
+
+    private void saveScheduledNotification(int id) {
+        Bundle notificationBundle = mNotificationProps.asBundle();
+        JSONObject json = new JSONObject();
+        for (String key: notificationBundle.keySet()) {
+            try {
+                json.put(key, JSONObject.wrap(notificationBundle.get(key)));
+            } catch (JSONException e) {
+                Log.d(LOGTAG, "Error saving preferences: " + e.getMessage());
+            }
+        }
+
+        SharedPreferences.Editor editor = mSharedPreferences.edit();
+        String idString = Integer.toString(id);
+        editor.putString(idString, json.toString());
+        editor.apply();
+
+        if (!mSharedPreferences.contains(idString)) {
+            Log.e(LOGTAG, "Failed to save " + idString);
+        }
     }
 
     protected int createNotificationId(Notification notification) {

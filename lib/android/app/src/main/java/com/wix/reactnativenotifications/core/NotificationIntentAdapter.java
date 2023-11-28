@@ -1,10 +1,14 @@
 package com.wix.reactnativenotifications.core;
 
+import static com.wix.reactnativenotifications.Defs.NOTIFICATION_EXTRA_PROPS;
+import static com.wix.reactnativenotifications.Defs.NOTIFICATION_EXTRA_ID;
+
 import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.app.TaskStackBuilder;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 
 import com.wix.reactnativenotifications.core.notification.PushNotificationProps;
@@ -25,6 +29,19 @@ public class NotificationIntentAdapter {
             taskStackBuilder.addNextIntentWithParentStack(mainActivityIntent);
             return taskStackBuilder.getPendingIntent((int) System.currentTimeMillis(), PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_ONE_SHOT | PendingIntent.FLAG_IMMUTABLE);
         }
+    }
+
+    public static PendingIntent createScheduledNotificationIntent(Context appContext, PushNotificationProps notification, Integer notificationId) {
+        int id = notificationId != null ? notificationId : (int) System.currentTimeMillis();
+        int flags = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+            ? PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            : PendingIntent.FLAG_UPDATE_CURRENT;
+
+        Intent scheduledIntent = new Intent(appContext, ScheduledNotificationReceiver.class);
+        scheduledIntent.putExtra(NOTIFICATION_EXTRA_PROPS, notification.asBundle());
+        scheduledIntent.putExtra(NOTIFICATION_EXTRA_ID, id);
+
+        return PendingIntent.getBroadcast(appContext, id, scheduledIntent, flags);
     }
 
     public static boolean canHandleTrampolineActivity(Context appContext) {
